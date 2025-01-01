@@ -10,8 +10,8 @@ pygame.display.set_caption("Game of Life")
 x, y = screen.get_size() # screen size
 
 # Adjust these to change amount of cells per column & row
-HORIZ_CELLS = 50
-VERT_CELLS = 40
+HORIZ_CELLS = 60
+VERT_CELLS = 60
 
 horiz_cell_space = x / HORIZ_CELLS
 vert_cell_space = y / VERT_CELLS
@@ -26,6 +26,13 @@ statuses = {
     "ALIVE": WHITE,
     "POPULATED": (5, 100, 242),
     "DEAD": (0, 0, 0)
+}
+
+status_names = {
+    statuses["OVERPOPULATED"]: "Overpopulated",
+    statuses["SOLITUDE"]: "Solitude",
+    statuses["ALIVE"]: "Alive",
+    statuses["POPULATED"]: "Populating..."
 }
 
 # settings
@@ -85,20 +92,12 @@ def GetPopulation():
 
     for row in cells:
         for cell in row:
-            if cell == statuses["ALIVE"]:
+            if cell == statuses["ALIVE"] or cell == statuses["POPULATED"]:
                 count += 1
 
     return count
 
-def DisplayTooltip(stats):
-    pass
-
 def UpdateGen(generation):
-    if complex or generation % 1 != 0:
-        generation += .5
-    else:
-        generation += 1
-    
     gen_changes = []
 
     for row_i in range(0, len(cells)):
@@ -157,6 +156,11 @@ def UpdateGen(generation):
 
     new_population = GetPopulation()
 
+    if complex or generation % 1 != 0:
+        generation += .5
+    else:
+        generation += 1
+
     return generation, new_population 
 
 def UpdateScreen(generation, population):
@@ -172,7 +176,25 @@ def UpdateScreen(generation, population):
         x, y = pygame.mouse.get_pos()
         cell_in_data, cell_positions = GetCellInList(y, x)
 
-        pygame.draw.rect(screen, HOVER, pygame.Rect(cell_positions[1], cell_positions[0], horiz_cell_space, vert_cell_space))
+        cell_y = cell_in_data[0]
+        cell_x = cell_in_data[1]
+
+        cell = cells[cell_y][cell_x]
+
+        if cell == statuses["DEAD"]:
+            pygame.draw.rect(screen, HOVER, pygame.Rect(cell_positions[1], cell_positions[0], horiz_cell_space, vert_cell_space))
+        else:
+            stat_display = text_font.render("Cell Status: " + status_names[cell], True, cell, (0, 0, 0))
+            coord_display = text_font.render("Coordinates: (" + str(cell_x) + "," + str(cell_y) + ")", True, WHITE, (0, 0, 0))
+
+            stat_rect = stat_display.get_rect()
+            coord_rect = coord_display.get_rect()
+
+            stat_rect.bottomleft = (x + 5, y + 26)
+            coord_rect.bottomleft = (x + 5, y + 5)
+
+            screen.blit(stat_display, stat_rect)
+            screen.blit(coord_display, coord_rect)
     
     # Generation/Population counters
     text_color = WHITE
@@ -233,11 +255,11 @@ while True:
                 pygame.mouse.set_visible(not is_evolving)
         elif event.type == pygame.MOUSEWHEEL:
             if event.y > 0:
-                tick_speed = pygame.math.clamp(tick_speed - 10, 5, 200)
+                tick_speed = pygame.math.clamp(tick_speed - 10, 5, 250)
             elif event.y < 0:
-                tick_speed = pygame.math.clamp(tick_speed + 10, 5, 200)
+                tick_speed = pygame.math.clamp(tick_speed + 10, 5, 250)
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_r:
+            if event.key == pygame.K_r and not is_evolving:
                 complex = not complex
         elif event.type == pygame.QUIT:
             pygame.quit()
