@@ -1,5 +1,5 @@
 # game of life
- Conway's Game of Life written in Python.
+ Conway's Game of Life written in Python, with some more features.
 
  I originally created this project in SkillStruck during class.
  To avoid limitations of SkillStruck and continue expanding on the code,
@@ -9,7 +9,7 @@
  - [x] Control of simulation/tick speed
  - [x] Playing the simulation
  - [x] Stepping the generation forward one by one
- - [ ] Tooltips for cells
+ - [ ] Tooltips for alive cells
  - [x] Generation/population counter
  - [x] Complex Mode
  - [ ] Undoing generations (history saves 50 generations back!)
