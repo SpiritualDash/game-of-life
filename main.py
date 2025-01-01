@@ -17,15 +17,15 @@ horiz_cell_space = x / HORIZ_CELLS
 vert_cell_space = y / VERT_CELLS
 
 # basic colors
-DEAD = (0, 0, 0)
 HOVER = (125, 125, 125)
-ALIVE = (255, 255, 255)
+WHITE = (255, 255, 255)
 
-cell_statuses = {
+statuses = {
     "OVERPOPULATED": (242, 222, 5),
     "SOLITUDE": (255, 0, 0),
-    "SURVIVED": ALIVE,
+    "ALIVE": WHITE,
     "POPULATED": (5, 100, 242),
+    "DEAD": (0, 0, 0)
 }
 
 # settings
@@ -36,7 +36,6 @@ tick_speed = 100 # in milliseconds
 # simulation properties
 generation = 0
 population = 0
-running = True
 is_evolving = False
 
 cells = [] 
@@ -47,12 +46,9 @@ for i in range(0, VERT_CELLS + 1):
     row_list = []
 
     for i in range(0, HORIZ_CELLS + 1):
-        row_list.append(False)
+        row_list.append(statuses["DEAD"])
 
     cells.append(row_list)
-
-def DisplayTooltip(stats):
-    pass
 
 def GetCellInList(y_pos, x_pos):
     index_y = int(y_pos / vert_cell_space)
@@ -63,12 +59,6 @@ def GetCellInList(y_pos, x_pos):
 
 def GetAmountOfLiveNeighbors(y_index, x_index):
     live_neighbors = 0
-
-    increment_list = [-1, 1]
-
-    # Ensure that the index is within the range.
-    # Handle valid indexes that go past length of cell list (negative index?)
-    # rewrite this later?
 
     neighbors = []
 
@@ -86,23 +76,29 @@ def GetAmountOfLiveNeighbors(y_index, x_index):
                 continue
 
     for neighbor in neighbors:
-        if neighbor == True: live_neighbors += 1
+        if neighbor == statuses["ALIVE"]: live_neighbors += 1
 
     return live_neighbors
 
 def GetPopulation():
     count = 0
-    
+
     for row in cells:
         for cell in row:
-            if cell:
+            if cell == statuses["ALIVE"]:
                 count += 1
 
     return count
 
-def UpdateGen(generation):
-    generation += 1
+def DisplayTooltip(stats):
+    pass
 
+def UpdateGen(generation):
+    if complex or generation % 1 != 0:
+        generation += .5
+    else:
+        generation += 1
+    
     gen_changes = []
 
     for row_i in range(0, len(cells)):
@@ -110,23 +106,45 @@ def UpdateGen(generation):
         for cell_i in range(0, len(row)):
             neighbor_count = GetAmountOfLiveNeighbors(row_i, cell_i)
             cell_tuple = (row_i, cell_i)
+            cell = row[cell_i]
 
-            if row[cell_i] == True:
-                if neighbor_count < 2:
-                    # Live cell w/ fewer than 2 live neighbours, death
-                    gen_changes.append([cell_tuple, False])
+            result_status = False
 
-                elif neighbor_count == 2 or neighbor_count == 3:
-                    # Live cell w/ 2 or 3 live neighbours, lives to next gen
-                    gen_changes.append([cell_tuple, True])
+            if generation % 1 == 0:
+                if cell == statuses["ALIVE"]:
+                    if neighbor_count < 2:
+                    # Live cell w/ fewer than 2 live neighbours, solitude
+                        if complex: 
+                            result_status = statuses["SOLITUDE"]
+                        else:
+                            result_status = statuses["DEAD"]
 
-                elif neighbor_count > 3:
-                    # Live cell w/ more than 3 live neighbours, death
-                    gen_changes.append([cell_tuple, False])
+                    elif neighbor_count == 2 or neighbor_count == 3:
+                    # Live cell w/ 2 or 3 live neighbours, survives to next gen
+                        result_status = statuses["ALIVE"]
 
-            elif row[cell_i] == False and neighbor_count == 3:
-                # Dead cell w/ exactly 3 live neighbours, becomes live cell
-                gen_changes.append([cell_tuple, True])
+                    elif neighbor_count > 3:
+                    # Live cell w/ more than 3 live neighbours, overpopulated
+                        if complex: 
+                            result_status = statuses["OVERPOPULATED"]
+                        else:
+                            result_status = statuses["DEAD"]
+                elif cell == statuses["DEAD"] and neighbor_count == 3:
+                    # Dead cell w/ exactly 3 live neighbours, becomes live cell
+                    if complex: 
+                        result_status = statuses["POPULATED"]
+                    else:
+                        result_status = statuses["ALIVE"]
+            else:
+                if cell == statuses["POPULATED"]:
+                    # Make cell live the next generation, complex mode
+                    result_status = statuses["ALIVE"]
+                elif cell == statuses["OVERPOPULATED"] or cell == statuses["SOLITUDE"]:
+                    # Make cell die the next generation, complex mode
+                    result_status = statuses["DEAD"]
+
+            if result_status:
+                gen_changes.append([cell_tuple, result_status])
     
     for change in gen_changes:
         cell_tuple = change[0]
@@ -142,13 +160,13 @@ def UpdateGen(generation):
     return generation, new_population 
 
 def UpdateScreen(generation, population):
-    screen.fill(DEAD)
+    screen.fill((0, 0, 0))
 
     for row_index in range(0, len(cells)):
         row = cells[row_index]
         for cell_index in range(0, len(row)):
-            if row[cell_index] == True:
-                pygame.draw.rect(screen, ALIVE, pygame.Rect(horiz_cell_space * cell_index, vert_cell_space * row_index, horiz_cell_space, vert_cell_space))
+            if row[cell_index] != statuses["DEAD"]:
+                pygame.draw.rect(screen, row[cell_index], pygame.Rect(horiz_cell_space * cell_index, vert_cell_space * row_index, horiz_cell_space, vert_cell_space))
 
     if pygame.mouse.get_visible():
         x, y = pygame.mouse.get_pos()
@@ -157,8 +175,12 @@ def UpdateScreen(generation, population):
         pygame.draw.rect(screen, HOVER, pygame.Rect(cell_positions[1], cell_positions[0], horiz_cell_space, vert_cell_space))
     
     # Generation/Population counters
-    gen_count = text_font.render("Generation: " + str(generation), True, ALIVE)
-    pop_count = text_font.render("Population: " + str(population), True, ALIVE)
+    text_color = WHITE
+    
+    if complex: text_color = statuses["POPULATED"]
+
+    gen_count = text_font.render("Generation: " + str(generation), True, text_color)
+    pop_count = text_font.render("Population: " + str(population), True, text_color)
 
     gen_rect = gen_count.get_rect()
     pop_rect = pop_count.get_rect()
@@ -178,7 +200,7 @@ def UpdateScreen(generation, population):
 
 # ------------------------------------
 
-while running:
+while True:
     if is_evolving:
         pygame.time.wait(tick_speed)
 
@@ -189,15 +211,17 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1: # L click
+                if is_evolving: continue
                 cell_clicked, cell_pos = GetCellInList(event.pos[1], event.pos[0])
                 y_index = cell_clicked[0]
                 x_index = cell_clicked[1]
                 cell = cells[y_index][x_index]
-                cells[y_index][x_index] = not cell
 
-                if cells[y_index][x_index]:
+                if cell == statuses["DEAD"]:
+                    cells[y_index][x_index] = statuses["ALIVE"]
                     population += 1
                 else:
+                    cells[y_index][x_index] = statuses["DEAD"]
                     population -= 1
             elif event.button == 2: # M click
                 new_gen, new_pop = UpdateGen(generation)
@@ -208,13 +232,13 @@ while running:
                 is_evolving = not is_evolving
                 pygame.mouse.set_visible(not is_evolving)
         elif event.type == pygame.MOUSEWHEEL:
-            if event.y == 1:
-                tick_speed = pygame.math.clamp(tick_speed - 5, 5, 200)
-            else:
-                tick_speed = pygame.math.clamp(tick_speed + 5, 5, 200)
+            if event.y > 0:
+                tick_speed = pygame.math.clamp(tick_speed - 10, 5, 200)
+            elif event.y < 0:
+                tick_speed = pygame.math.clamp(tick_speed + 10, 5, 200)
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_r:
-                complex = True
+                complex = not complex
         elif event.type == pygame.QUIT:
             pygame.quit()
             quit()
