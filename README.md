@@ -10,7 +10,7 @@
  - [x] Playing the simulation
  - [x] Stepping the generation forward one by one
  - [ ] Tooltips for cells
- - [ ] Generation/population counter
+ - [x] Generation/population counter
  - [ ] Complex mode (displays specific cell statuses)
  - [ ] Undoing generations (history saves 50 generations back!)
  - [ ] Rainbow cheat code (for fun!)

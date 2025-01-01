@@ -2,7 +2,7 @@ import pygame
 
 pygame.init()
 
-text_font = pygame.font.SysFont("Arial", 12)
+text_font = pygame.font.SysFont("Arial", 18)
 
 screen = pygame.display.set_mode((500, 500))
 pygame.display.set_caption("Game of Life")
@@ -20,6 +20,13 @@ vert_cell_space = y / VERT_CELLS
 DEAD = (0, 0, 0)
 HOVER = (125, 125, 125)
 ALIVE = (255, 255, 255)
+
+cell_statuses = {
+    "OVERPOPULATED": (242, 222, 5),
+    "SOLITUDE": (255, 0, 0),
+    "SURVIVED": ALIVE,
+    "POPULATED": (5, 100, 242),
+}
 
 # settings
 complex = False
@@ -44,16 +51,8 @@ for i in range(0, VERT_CELLS + 1):
 
     cells.append(row_list)
 
-
-def DisplayText(words): # , position, size
-    text_obj = text_font.render(words, True, ALIVE)
-
-    rect = text_obj.get_rect()
-    rect.width = 100
-    rect.height = 50
-    rect.center = (x // 2, y // 2)
-
-    screen.blit(text_obj, rect)
+def DisplayTooltip(stats):
+    pass
 
 def GetCellInList(y_pos, x_pos):
     index_y = int(y_pos / vert_cell_space)
@@ -91,8 +90,17 @@ def GetAmountOfLiveNeighbors(y_index, x_index):
 
     return live_neighbors
 
-def UpdateGen():
-    global generation
+def GetPopulation():
+    count = 0
+    
+    for row in cells:
+        for cell in row:
+            if cell:
+                count += 1
+
+    return count
+
+def UpdateGen(generation):
     generation += 1
 
     gen_changes = []
@@ -119,7 +127,7 @@ def UpdateGen():
             elif row[cell_i] == False and neighbor_count == 3:
                 # Dead cell w/ exactly 3 live neighbours, becomes live cell
                 gen_changes.append([cell_tuple, True])
-
+    
     for change in gen_changes:
         cell_tuple = change[0]
         is_alive = change[1]
@@ -129,7 +137,11 @@ def UpdateGen():
 
         cells[y_ind][x_ind] = is_alive
 
-def UpdateScreenRects():
+    new_population = GetPopulation()
+
+    return generation, new_population 
+
+def UpdateScreen(generation, population):
     screen.fill(DEAD)
 
     for row_index in range(0, len(cells)):
@@ -144,13 +156,35 @@ def UpdateScreenRects():
 
         pygame.draw.rect(screen, HOVER, pygame.Rect(cell_positions[1], cell_positions[0], horiz_cell_space, vert_cell_space))
     
-    DisplayText("Generation: " + str(generation), )
+    # Generation/Population counters
+    gen_count = text_font.render("Generation: " + str(generation), True, ALIVE)
+    pop_count = text_font.render("Population: " + str(population), True, ALIVE)
+
+    gen_rect = gen_count.get_rect()
+    pop_rect = pop_count.get_rect()
+    
+    gen_rect.width = 100
+    gen_rect.height = 75
+    gen_rect.topleft = (0, 0)
+
+    pop_rect.width = 100
+    pop_rect.height = 75
+    pop_rect.topleft = (0, 20)
+
+    screen.blit(gen_count, gen_rect)
+    screen.blit(pop_count, pop_rect)
 
     pygame.display.flip()
 
-def ProcessEvents():
-    global is_evolving
-    global tick_speed
+# ------------------------------------
+
+while running:
+    if is_evolving:
+        pygame.time.wait(tick_speed)
+
+        new_gen, new_pop = UpdateGen(generation)
+        generation = new_gen
+        population = new_pop
 
     for event in pygame.event.get():
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -160,8 +194,16 @@ def ProcessEvents():
                 x_index = cell_clicked[1]
                 cell = cells[y_index][x_index]
                 cells[y_index][x_index] = not cell
+
+                if cells[y_index][x_index]:
+                    population += 1
+                else:
+                    population -= 1
             elif event.button == 2: # M click
-                UpdateGen()
+                new_gen, new_pop = UpdateGen(generation)
+
+                generation = new_gen
+                population = new_pop
             elif event.button == 3: # R click
                 is_evolving = not is_evolving
                 pygame.mouse.set_visible(not is_evolving)
@@ -170,17 +212,11 @@ def ProcessEvents():
                 tick_speed = pygame.math.clamp(tick_speed - 5, 5, 200)
             else:
                 tick_speed = pygame.math.clamp(tick_speed + 5, 5, 200)
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r:
+                complex = True
         elif event.type == pygame.QUIT:
             pygame.quit()
             quit()
-
-# ------------------------------------
-
-while running:
-    if is_evolving:
-        pygame.time.wait(tick_speed)
-        UpdateGen()
-
-    ProcessEvents()
-
-    UpdateScreenRects()
+    
+    UpdateScreen(generation, population)
