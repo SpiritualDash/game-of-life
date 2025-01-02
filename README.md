@@ -13,7 +13,6 @@
  - [x] Generation/population counter
  - [x] Complex Mode
  - [ ] Generation history/undoing (saves up to 50 previous generations)
- - [ ] Rainbow cheat code (for fun!)
 
  Possible goals for this system:
  - [ ] Infinite/bigger grid using quadtrees
