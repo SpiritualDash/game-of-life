@@ -12,13 +12,13 @@
  - [x] Tooltips for alive cells
  - [x] Generation/population counter
  - [x] Complex Mode
- - [ ] Generation history/undoing (saves up to 50 previous generations)
+ - [x] Generation history/undoing & redoing (saves up to 75 previous generations, half gens are treated as full)
 
  Possible goals for this system:
- - [ ] Infinite/bigger grid using quadtrees
+ - [ ] Infinite/bigger grid (using quadtrees?)
 
  # Complex Mode
- Complex Mode can be toggled on or off by pressing R while the simulation is not running.
+ Complex Mode can be toggled on or off by pressing R.
 
  In Complex Mode, the game will specify before a generation update what caused the cell to generate,
  displaying what rule kicked in to cause the cell to change. These are considered transition states, 

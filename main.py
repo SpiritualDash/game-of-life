@@ -16,6 +16,8 @@ VERT_CELLS = 60
 HORIZ_SIZE = x / HORIZ_CELLS
 VERT_SIZE = y / VERT_CELLS
 
+HISTORY_STACK_SIZE = 75
+
 # basic colors
 HOVER = (125, 125, 125)
 WHITE = (255, 255, 255)
@@ -85,7 +87,24 @@ def GetPopulation():
 
     return count
 
-def UpdateGen(generation, complex):
+def ProcessChanges(gen_changes):
+    for change in gen_changes:
+        cell_tuple, status = change
+        y_ind, x_ind = cell_tuple
+
+        cells[y_ind][x_ind] = status
+
+# for saving actions for the redo/undo stack
+def StorePreviousStates(changes, prev_gen, prev_pop, prev_complex):
+    previous_states = [(prev_gen, prev_pop, prev_complex)]
+
+    for change in changes:
+        y_ind, x_ind = change[0]
+        previous_states.append((change[0], cells[y_ind][x_ind]))
+
+    return previous_states
+
+def UpdateGen(generation, population, complex):
     gen_changes = []
 
     for x, column in enumerate(cells):
@@ -130,13 +149,9 @@ def UpdateGen(generation, complex):
             if result_status:
                 gen_changes.append((cell_tuple, result_status))
     
-    for change in gen_changes:
-        cell_tuple, status = change
-        y_ind, x_ind = cell_tuple
+    undo_states = StorePreviousStates(gen_changes, generation, population, complex)
+    ProcessChanges(gen_changes)
 
-        cells[y_ind][x_ind] = status
-
-    # history_save = 
     new_population = GetPopulation()
 
     if complex or generation % 1 != 0:
@@ -144,7 +159,7 @@ def UpdateGen(generation, complex):
     else:
         generation += 1
 
-    return generation, new_population 
+    return generation, new_population, undo_states
 
 def UpdateScreen(generation, population, complex):
     screen.fill((0, 0, 0))
@@ -210,13 +225,19 @@ def main():
     generation = 0
     population = 0
     is_evolving = False
-    gen_history = []
+
+    undo_stack = []
+    redo_stack = []
 
     while True:
         if is_evolving:
             pygame.time.wait(tick_speed)
 
-            generation, population = UpdateGen(generation, complex)
+            generation, population, undo_states = UpdateGen(generation, population, complex)
+            undo_stack.insert(0, undo_states)
+
+            if len(undo_stack) >  HISTORY_STACK_SIZE:
+                undo_stack.pop()
 
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -232,18 +253,60 @@ def main():
                         cells[x_index][y_index] = STATUSES["DEAD"]
                         population -= 1
                 elif event.button == 2: # M click
-                    generation, population = UpdateGen(generation, complex)
+                    generation, population = UpdateGen(generation, population, complex)
                 elif event.button == 3: # R click
                     is_evolving = not is_evolving
                     pygame.mouse.set_visible(not is_evolving)
+
+            # elif event.type == pygame.MOUSEMOTION and event.buttons[0] == 1:
+            #     cell_data_pos, status = GetCell(event.pos[0], event.pos[1])
+            #     x_index, y_index = cell_data_pos
+
+            #     if status == STATUSES["DEAD"]:
+            #         cells[x_index][y_index] = STATUSES["ALIVE"]
+            #         population += 1
+            #     else:
+            #         cells[x_index][y_index] = STATUSES["DEAD"]
+            #         population -= 1
             elif event.type == pygame.MOUSEWHEEL:
                 if event.y > 0:
                     tick_speed = pygame.math.clamp(tick_speed - 10, 5, 250)
                 elif event.y < 0:
                     tick_speed = pygame.math.clamp(tick_speed + 10, 5, 250)
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r and not is_evolving:
+                if event.key == pygame.K_r:
                     complex = not complex
+                elif not is_evolving and event.mod % pygame.KMOD_CTRL:
+                    if event.key == pygame.K_y and len(redo_stack) > 0:
+                        change_list = redo_stack.pop(0)
+                        stats = change_list[0]
+                        changes = change_list[1: ]
+
+                        undo_stack.insert(0, StorePreviousStates(changes, generation, population, complex))
+
+                        if len(undo_stack) >  HISTORY_STACK_SIZE:
+                            undo_stack.pop()
+
+                        generation = stats[0]
+                        population = stats[1]
+                        complex = stats[2]
+
+                        ProcessChanges(changes)
+                    elif event.key == pygame.K_z and len(undo_stack) > 0:
+                        change_list = undo_stack.pop(0)
+                        stats = change_list[0]
+                        changes = change_list[1: ]
+
+                        redo_stack.insert(0, StorePreviousStates(changes, generation, population, complex))
+
+                        if len(redo_stack) > HISTORY_STACK_SIZE:
+                            redo_stack.pop()
+
+                        generation = stats[0]
+                        population = stats[1]
+                        complex = stats[2]
+
+                        ProcessChanges(changes)
             elif event.type == pygame.QUIT:
                 pygame.quit()
                 quit()
