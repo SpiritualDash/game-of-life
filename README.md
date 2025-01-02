@@ -1,5 +1,12 @@
-# Game of Life
+# Game of Life (Experimental Branch)
  Conway's Game of Life written in Python, with some more features.
+
+ This experimental branch, if added, will add:
+ - [ ] Camera
+ - [x] Grid without cell initialization
+
+ I'm not sure if I can make the grid bigger, but optimizing and removing the clutter of cells
+ that are dead should make it better.
 
  I originally created this project in SkillStruck during Computer Science I class.
  To avoid limitations of SkillStruck and continue expanding on the code,
@@ -14,7 +21,7 @@
  - [x] Complex Mode
  - [x] Generation history/undoing & redoing (saves up to 75 previous generations, half gens are treated as full)
 
- Possible goals for this system:
+  Possible goals for this system:
  - [ ] Infinite/bigger grid (using quadtrees?)
 
  # Complex Mode

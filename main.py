@@ -37,85 +37,79 @@ STATUS_NAMES = {
     STATUSES["POPULATED"]: "Populating..."
 }
 
-cells = [] 
+cells = {}
 
-# Initialize dead units
-for i in range(0, HORIZ_CELLS + 1):
-    columns = []
+# # Initialize dead units
+# for i in range(0, HORIZ_CELLS + 1):
+#     columns = []
 
-    for i in range(0, VERT_CELLS + 1):
-        columns.append(STATUSES["DEAD"])
+#     for i in range(0, VERT_CELLS + 1):
+#         columns.append(STATUSES["DEAD"])
 
-    cells.append(columns)
+#     cells.append(columns)
 
 def GetCell(cursor_x, cursor_y):
-    x_index = int(cursor_x / HORIZ_SIZE)
-    y_index = int(cursor_y / VERT_SIZE)
+    cell_pos = int(cursor_x / HORIZ_SIZE), int(cursor_y / VERT_SIZE)
+    cell_status = cells.get(cell_pos, STATUSES["DEAD"])
 
-    return (x_index, y_index), cells[x_index][y_index]
+    return cell_pos, cell_status
 
 def GetAmountOfLiveNeighbors(x_index, y_index):
     live_neighbors = 0
-
-    neighbors = []
 
     for x_increment in range(-1, 2):
         for y_increment in range(-1, 2):
             neighbor_x = x_index + x_increment
             neighbor_y = y_index + y_increment
-            
+            cell_pos = neighbor_x, neighbor_y
+
             if neighbor_x < 0 or neighbor_y < 0: continue
             if neighbor_x == x_index and neighbor_y == y_index: continue
 
-            try: 
-                neighbors.append(cells[neighbor_x][neighbor_y])
-            except IndexError:
-                continue
+            cell_status = cells.get(cell_pos, None)
 
-    for neighbor in neighbors:
-        if neighbor == STATUSES["ALIVE"]: live_neighbors += 1
+            if cell_status == STATUSES["ALIVE"]: live_neighbors += 1
 
     return live_neighbors
 
 def GetPopulation():
     count = 0
 
-    for column in cells:
-        for cell in column:
-            if cell == STATUSES["ALIVE"] or cell == STATUSES["POPULATED"]:
-                count += 1
+    for status in cells.values():
+        if status == STATUSES["ALIVE"] or status == STATUSES["POPULATED"]: count += 1
 
     return count
 
 def ProcessChanges(gen_changes):
     for change in gen_changes:
-        cell_tuple, status = change
-        y_ind, x_ind = cell_tuple
+        cell_pos, status = change
 
-        cells[y_ind][x_ind] = status
+        if status == STATUSES["DEAD"]: 
+            cells.pop(cell_pos)
+        else:
+            cells[cell_pos] = status
 
 # for saving actions for the redo/undo stack
 def StorePreviousStates(changes, prev_gen, prev_pop, prev_complex):
-    previous_states = [(prev_gen, prev_pop, prev_complex)]
-
-    for change in changes:
-        y_ind, x_ind = change[0]
-        previous_states.append((change[0], cells[y_ind][x_ind]))
+    previous_states = [(change[0], cells.get(change[0], STATUSES["DEAD"])) for change in changes]
+    previous_states.insert(0, (prev_gen, prev_pop, prev_complex))
 
     return previous_states
 
 def UpdateGen(generation, population, complex):
     gen_changes = []
 
-    for x, column in enumerate(cells):
-        for y, cell in enumerate(column):
+    for x in range(0, HORIZ_CELLS):
+        for y in range(0, VERT_CELLS):
+            cell_pos = x, y
+            status = cells.get(cell_pos, STATUSES["DEAD"])
+
             neighbor_count = GetAmountOfLiveNeighbors(x, y)
-            cell_tuple = x, y 
 
             result_status = False
 
             if generation % 1 == 0:
-                if cell == STATUSES["ALIVE"]:
+                if status == STATUSES["ALIVE"]:
                     if neighbor_count < 2:
                     # Live cell w/ fewer than 2 live neighbours, solitude
                         if complex: 
@@ -132,22 +126,22 @@ def UpdateGen(generation, population, complex):
                             result_status = STATUSES["OVERPOPULATED"]
                         else:
                             result_status = STATUSES["DEAD"]
-                elif cell == STATUSES["DEAD"] and neighbor_count == 3:
+                elif status == STATUSES["DEAD"] and neighbor_count == 3:
                     # Dead cell w/ exactly 3 live neighbours, becomes live cell
                     if complex: 
                         result_status = STATUSES["POPULATED"]
                     else:
                         result_status = STATUSES["ALIVE"]
             else:
-                if cell == STATUSES["POPULATED"]:
+                if status == STATUSES["POPULATED"]:
                     # Make cell live the next generation, complex mode
                     result_status = STATUSES["ALIVE"]
-                elif cell == STATUSES["OVERPOPULATED"] or cell == STATUSES["SOLITUDE"]:
+                elif status == STATUSES["OVERPOPULATED"] or status == STATUSES["SOLITUDE"]:
                     # Make cell die the next generation, complex mode
                     result_status = STATUSES["DEAD"]
 
             if result_status:
-                gen_changes.append((cell_tuple, result_status))
+                gen_changes.append((cell_pos, result_status))
     
     undo_states = StorePreviousStates(gen_changes, generation, population, complex)
     ProcessChanges(gen_changes)
@@ -166,9 +160,9 @@ def UpdateScreen(generation, population, complex):
 
     if pygame.mouse.get_visible():
         x, y = pygame.mouse.get_pos()
-        cell_list_pos, status = GetCell(x, y)
+        cell_pos, status = GetCell(x, y)
 
-        cell_x, cell_y = cell_list_pos
+        cell_x, cell_y = cell_pos
         cell_screen_x, cell_screen_y = HORIZ_SIZE * cell_x, VERT_SIZE * cell_y
 
         if status == STATUSES["DEAD"]:
@@ -186,10 +180,11 @@ def UpdateScreen(generation, population, complex):
             screen.blit(stat_display, stat_rect)
             screen.blit(coord_display, coord_rect)
     
-    for x, column in enumerate(cells):
-        for y, cell in enumerate(column):
-            if cell != STATUSES["DEAD"]:
-                pygame.draw.rect(screen, cell, pygame.Rect(HORIZ_SIZE * x, VERT_SIZE * y, HORIZ_SIZE, VERT_SIZE))
+    for x in range(0, HORIZ_CELLS):
+        for y in range(0, VERT_CELLS):
+            status = cells.get((x, y), STATUSES["DEAD"])
+            if status != STATUSES["DEAD"]:
+                pygame.draw.rect(screen, status, pygame.Rect(HORIZ_SIZE * x, VERT_SIZE * y, HORIZ_SIZE, VERT_SIZE))
 
     
     # Generation/Population counters
@@ -243,14 +238,13 @@ def main():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1: # L click
                     if is_evolving: continue
-                    cell_data_pos, status = GetCell(event.pos[0], event.pos[1])
-                    x_index, y_index = cell_data_pos
+                    cell_pos, status = GetCell(event.pos[0], event.pos[1])
 
                     if status == STATUSES["DEAD"]:
-                        cells[x_index][y_index] = STATUSES["ALIVE"]
+                        cells[cell_pos] = STATUSES["ALIVE"]
                         population += 1
                     else:
-                        cells[x_index][y_index] = STATUSES["DEAD"]
+                        cells.pop(cell_pos)
                         population -= 1
                 elif event.button == 2: # M click
                     generation, population = UpdateGen(generation, population, complex)
