@@ -4,17 +4,11 @@ pygame.init()
 
 text_font = pygame.font.SysFont("Arial", 18)
 
-screen = pygame.display.set_mode((500, 500))
+screen = pygame.display.set_mode((500, 500), pygame.RESIZABLE)
 pygame.display.set_caption("Game of Life")
 
-x, y = screen.get_size() # screen size
-
-# Adjust these to change amount of cells per column & row
-HORIZ_CELLS = 60
-VERT_CELLS = 60
-
-HORIZ_SIZE = x / HORIZ_CELLS
-VERT_SIZE = y / VERT_CELLS
+# change cell size
+SIZE = 7
 
 HISTORY_STACK_SIZE = 75
 
@@ -37,122 +31,124 @@ STATUS_NAMES = {
     STATUSES["POPULATED"]: "Populating..."
 }
 
-cells = [] 
+GEN_UPDATE = pygame.USEREVENT + 1
 
-# Initialize dead units
-for i in range(0, HORIZ_CELLS + 1):
-    columns = []
+cells = {}
 
-    for i in range(0, VERT_CELLS + 1):
-        columns.append(STATUSES["DEAD"])
+def get_cell(cursor_x, cursor_y, camera_pos):
+    cell_pos =  int(cursor_x / SIZE) + int(camera_pos[0] / SIZE), int(cursor_y / SIZE) + int(camera_pos[1] / SIZE)
+    cell_status = cells.get(cell_pos, STATUSES["DEAD"])
 
-    cells.append(columns)
+    return cell_pos, cell_status
 
-def GetCell(cursor_x, cursor_y):
-    x_index = int(cursor_x / HORIZ_SIZE)
-    y_index = int(cursor_y / VERT_SIZE)
-
-    return (x_index, y_index), cells[x_index][y_index]
-
-def GetAmountOfLiveNeighbors(x_index, y_index):
+def get_neighbors(x_index, y_index):
     live_neighbors = 0
-
-    neighbors = []
+    dead_neighbors = []
 
     for x_increment in range(-1, 2):
         for y_increment in range(-1, 2):
             neighbor_x = x_index + x_increment
             neighbor_y = y_index + y_increment
-            
-            if neighbor_x < 0 or neighbor_y < 0: continue
+            cell_pos = neighbor_x, neighbor_y
+
             if neighbor_x == x_index and neighbor_y == y_index: continue
 
-            try: 
-                neighbors.append(cells[neighbor_x][neighbor_y])
-            except IndexError:
-                continue
+            cell_status = cells.get(cell_pos, STATUSES["DEAD"])
 
-    for neighbor in neighbors:
-        if neighbor == STATUSES["ALIVE"]: live_neighbors += 1
+            if cell_status == STATUSES["ALIVE"]: 
+                live_neighbors += 1
+            elif cell_status == STATUSES["DEAD"]:
+                dead_neighbors.append(cell_pos)
 
-    return live_neighbors
+    return live_neighbors, dead_neighbors
 
-def GetPopulation():
+def get_population():
     count = 0
 
-    for column in cells:
-        for cell in column:
-            if cell == STATUSES["ALIVE"] or cell == STATUSES["POPULATED"]:
-                count += 1
+    for status in cells.values():
+        if status == STATUSES["ALIVE"] or status == STATUSES["POPULATED"]: count += 1
 
     return count
 
-def ProcessChanges(gen_changes):
-    for change in gen_changes:
-        cell_tuple, status = change
-        y_ind, x_ind = cell_tuple
+def get_result_status(complex, neighbor_count, status):
+    if status == STATUSES["ALIVE"]:
+        if neighbor_count < 2:
+            # Live cell w/ fewer than 2 live neighbours, solitude
+            if complex: 
+                return STATUSES["SOLITUDE"]
+            else:
+                return STATUSES["DEAD"]
+        elif neighbor_count == 2 or neighbor_count == 3:
+            # Live cell w/ 2 or 3 live neighbours, survives to next gen
+            return STATUSES["ALIVE"]
+        elif neighbor_count > 3:
+            # Live cell w/ more than 3 live neighbours, overpopulated
+            if complex: 
+                return STATUSES["OVERPOPULATED"]
+            else:
+                return STATUSES["DEAD"]
+    elif status == STATUSES["DEAD"] and neighbor_count == 3:
+        # Dead cell w/ exactly 3 live neighbours, becomes live cell
+        if complex: 
+            return STATUSES["POPULATED"]
+        else:
+            return STATUSES["ALIVE"]
+            
+    return None
 
-        cells[y_ind][x_ind] = status
+def process_changes(gen_changes):
+    for cell_pos, status in gen_changes.items():
+        if status == STATUSES["DEAD"]: 
+            cells.pop(cell_pos)
+        else:
+            cells[cell_pos] = status
 
 # for saving actions for the redo/undo stack
-def StorePreviousStates(changes, prev_gen, prev_pop, prev_complex):
-    previous_states = [(prev_gen, prev_pop, prev_complex)]
-
-    for change in changes:
-        y_ind, x_ind = change[0]
-        previous_states.append((change[0], cells[y_ind][x_ind]))
+def store_previous_states(changes, prev_gen, prev_pop, prev_complex):
+    previous_states = {cell_pos: STATUSES["DEAD"] for cell_pos, _ in changes.items()}
+    previous_states["stats"] = (prev_gen, prev_pop, prev_complex)
 
     return previous_states
 
-def UpdateGen(generation, population, complex):
-    gen_changes = []
+def update_gen(generation, population, complex):
+    gen_changes = {}
+    dead_cells_checked = []
 
-    for x, column in enumerate(cells):
-        for y, cell in enumerate(column):
-            neighbor_count = GetAmountOfLiveNeighbors(x, y)
-            cell_tuple = x, y 
+    for cell_pos, status in cells.items():
+        # all cells here have a status
+        result_status = None
 
-            result_status = False
+        # not half gen
+        if generation % 1 == 0:
+            neighbor_count, dead_neighbors = get_neighbors(cell_pos[0], cell_pos[1])
 
-            if generation % 1 == 0:
-                if cell == STATUSES["ALIVE"]:
-                    if neighbor_count < 2:
-                    # Live cell w/ fewer than 2 live neighbours, solitude
-                        if complex: 
-                            result_status = STATUSES["SOLITUDE"]
-                        else:
-                            result_status = STATUSES["DEAD"]
-                    elif neighbor_count == 2 or neighbor_count == 3:
-                    # Live cell w/ 2 or 3 live neighbours, survives to next gen
-                        result_status = STATUSES["ALIVE"]
+            result_status = get_result_status(complex, neighbor_count, status)
 
-                    elif neighbor_count > 3:
-                    # Live cell w/ more than 3 live neighbours, overpopulated
-                        if complex: 
-                            result_status = STATUSES["OVERPOPULATED"]
-                        else:
-                            result_status = STATUSES["DEAD"]
-                elif cell == STATUSES["DEAD"] and neighbor_count == 3:
-                    # Dead cell w/ exactly 3 live neighbours, becomes live cell
-                    if complex: 
-                        result_status = STATUSES["POPULATED"]
-                    else:
-                        result_status = STATUSES["ALIVE"]
-            else:
-                if cell == STATUSES["POPULATED"]:
-                    # Make cell live the next generation, complex mode
-                    result_status = STATUSES["ALIVE"]
-                elif cell == STATUSES["OVERPOPULATED"] or cell == STATUSES["SOLITUDE"]:
-                    # Make cell die the next generation, complex mode
-                    result_status = STATUSES["DEAD"]
+            # check dead cells around alive cell
+            for dead_pos in dead_neighbors:
+                if dead_pos in dead_cells_checked: continue 
+                dead_cells_checked.append(dead_pos)
 
-            if result_status:
-                gen_changes.append((cell_tuple, result_status))
+                count, _ = get_neighbors(dead_pos[0], dead_pos[1])
+                dead_status = get_result_status(complex, count, STATUSES["DEAD"])
+
+                if dead_status is not None:
+                    gen_changes[dead_pos] = dead_status
+        else:
+            if status == STATUSES["POPULATED"]:
+                # Make cell live the next generation, complex mode
+                result_status = STATUSES["ALIVE"]
+            elif status == STATUSES["OVERPOPULATED"] or status == STATUSES["SOLITUDE"]:
+                # Make cell die the next generation, complex mode
+                result_status = STATUSES["DEAD"]
+
+        if result_status is not None:
+            gen_changes[cell_pos] = result_status
     
-    undo_states = StorePreviousStates(gen_changes, generation, population, complex)
-    ProcessChanges(gen_changes)
+    undo_states = store_previous_states(gen_changes, generation, population, complex)
+    process_changes(gen_changes)
 
-    new_population = GetPopulation()
+    new_population = get_population()
 
     if complex or generation % 1 != 0:
         generation += .5
@@ -161,18 +157,17 @@ def UpdateGen(generation, population, complex):
 
     return generation, new_population, undo_states
 
-def UpdateScreen(generation, population, complex):
+def update_screen(generation, population, complex, camera_pos):
     screen.fill((0, 0, 0))
 
     if pygame.mouse.get_visible():
         x, y = pygame.mouse.get_pos()
-        cell_list_pos, status = GetCell(x, y)
+        cell_pos, status = get_cell(x, y, camera_pos)
 
-        cell_x, cell_y = cell_list_pos
-        cell_screen_x, cell_screen_y = HORIZ_SIZE * cell_x, VERT_SIZE * cell_y
+        cell_x, cell_y = cell_pos
 
         if status == STATUSES["DEAD"]:
-            pygame.draw.rect(screen, HOVER, pygame.Rect(cell_screen_x, cell_screen_y, HORIZ_SIZE, VERT_SIZE))
+            pygame.draw.rect(screen, HOVER, pygame.Rect(int(x / SIZE) * SIZE, int(y / SIZE) * SIZE, SIZE, SIZE))
         else:
             stat_display = text_font.render(f"Cell Status: {STATUS_NAMES[status]}", True, status, (0, 0, 0))
             coord_display = text_font.render(f"Coordinates: ({cell_x}, {cell_y})", True, WHITE, (0, 0, 0))
@@ -186,11 +181,9 @@ def UpdateScreen(generation, population, complex):
             screen.blit(stat_display, stat_rect)
             screen.blit(coord_display, coord_rect)
     
-    for x, column in enumerate(cells):
-        for y, cell in enumerate(column):
-            if cell != STATUSES["DEAD"]:
-                pygame.draw.rect(screen, cell, pygame.Rect(HORIZ_SIZE * x, VERT_SIZE * y, HORIZ_SIZE, VERT_SIZE))
-
+    for cell_pos, status in cells.items():
+        x, y = cell_pos
+        pygame.draw.rect(screen, status, pygame.Rect((SIZE * x) - camera_pos[0], (SIZE * y) - camera_pos[1], SIZE, SIZE))
     
     # Generation/Population counters
     text_color = WHITE
@@ -226,39 +219,98 @@ def main():
     population = 0
     is_evolving = False
 
+    camera_pos =  [0, 0]
+
     undo_stack = []
     redo_stack = []
 
     while True:
-        if is_evolving:
-            pygame.time.wait(tick_speed)
-
-            generation, population, undo_states = UpdateGen(generation, population, complex)
-            undo_stack.insert(0, undo_states)
-
-            if len(undo_stack) >  HISTORY_STACK_SIZE:
-                undo_stack.pop()
-
+        pygame.time.Clock().tick(60)
+        pressed = pygame.key.get_pressed()
+        if pressed[pygame.K_w]:
+            camera_pos[1] -= SIZE
+        if pressed[pygame.K_a]:
+            camera_pos[0] -= SIZE
+        if pressed[pygame.K_s]:
+            camera_pos[1] += SIZE
+        if pressed[pygame.K_d]:
+            camera_pos[0] += SIZE
+        
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1: # L click
-                    if is_evolving: continue
-                    cell_data_pos, status = GetCell(event.pos[0], event.pos[1])
-                    x_index, y_index = cell_data_pos
-
+                if event.button == 1 and not is_evolving: # L click
+                    cell_pos, status = get_cell(event.pos[0], event.pos[1], camera_pos)
                     if status == STATUSES["DEAD"]:
-                        cells[x_index][y_index] = STATUSES["ALIVE"]
+                        cells[cell_pos] = STATUSES["ALIVE"]
                         population += 1
                     else:
-                        cells[x_index][y_index] = STATUSES["DEAD"]
+                        cells.pop(cell_pos)
                         population -= 1
                 elif event.button == 2: # M click
-                    generation, population, _= UpdateGen(generation, population, complex)
+                    generation, population, _ = update_gen(generation, population, complex)
                 elif event.button == 3: # R click
                     is_evolving = not is_evolving
-                    pygame.mouse.set_visible(not is_evolving)
 
-            # elif event.type == pygame.MOUSEMOTION and event.buttons[0] == 1:
+                    if is_evolving:
+                        wait_time = tick_speed
+
+                        if complex: wait_time = tick_speed - int(tick_speed / 4)
+                        pygame.time.set_timer(GEN_UPDATE, wait_time)
+                    else:
+                        pygame.time.set_timer(GEN_UPDATE, 0)
+                    
+                    pygame.mouse.set_visible(not is_evolving)
+            elif event.type == pygame.MOUSEWHEEL:
+                if event.y > 0:
+                    tick_speed = pygame.math.clamp(tick_speed - 10, 50, 200)
+                elif event.y < 0:
+                    tick_speed = pygame.math.clamp(tick_speed + 10, 50, 200)
+
+                if is_evolving:
+                    wait_time = tick_speed
+                    if complex: wait_time = tick_speed - int(tick_speed / 4)
+
+                    pygame.time.set_timer(GEN_UPDATE, wait_time)
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    complex = not complex
+                elif not is_evolving and event.mod % pygame.KMOD_CTRL:
+                    if event.key == pygame.K_y and len(redo_stack) > 0:
+                        change_dict = redo_stack.pop(0)
+                        stats = change_dict.pop("stats")
+
+                        undo_stack.insert(0, store_previous_states(change_dict, generation, population, complex))
+
+                        if len(undo_stack) >  HISTORY_STACK_SIZE:
+                            undo_stack.pop()
+
+                        generation, population, complex = stats
+
+                        process_changes(change_dict)
+                    elif event.key == pygame.K_z and len(undo_stack) > 0:
+                        change_dict = undo_stack.pop(0)
+                        stats = change_dict.pop("stats")
+
+                        redo_stack.insert(0, store_previous_states(change_dict, generation, population, complex))
+
+                        if len(redo_stack) > HISTORY_STACK_SIZE:
+                            redo_stack.pop()
+
+                        generation, population, complex = stats
+
+                        process_changes(change_dict)
+            elif event.type == GEN_UPDATE:
+                generation, population, undo_states = update_gen(generation, population, complex)
+                undo_stack.insert(0, undo_states)
+
+                if len(undo_stack) >  HISTORY_STACK_SIZE:
+                    undo_stack.pop()
+            elif event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+                
+
+                # elif event.type == pygame.MOUSEMOTION and event.buttons[0] == 1:
             #     cell_data_pos, status = GetCell(event.pos[0], event.pos[1])
             #     x_index, y_index = cell_data_pos
 
@@ -268,50 +320,8 @@ def main():
             #     else:
             #         cells[x_index][y_index] = STATUSES["DEAD"]
             #         population -= 1
-            elif event.type == pygame.MOUSEWHEEL:
-                if event.y > 0:
-                    tick_speed = pygame.math.clamp(tick_speed - 10, 5, 250)
-                elif event.y < 0:
-                    tick_speed = pygame.math.clamp(tick_speed + 10, 5, 250)
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r:
-                    complex = not complex
-                elif not is_evolving and event.mod % pygame.KMOD_CTRL:
-                    if event.key == pygame.K_y and len(redo_stack) > 0:
-                        change_list = redo_stack.pop(0)
-                        stats = change_list[0]
-                        changes = change_list[1: ]
-
-                        undo_stack.insert(0, StorePreviousStates(changes, generation, population, complex))
-
-                        if len(undo_stack) >  HISTORY_STACK_SIZE:
-                            undo_stack.pop()
-
-                        generation = stats[0]
-                        population = stats[1]
-                        complex = stats[2]
-
-                        ProcessChanges(changes)
-                    elif event.key == pygame.K_z and len(undo_stack) > 0:
-                        change_list = undo_stack.pop(0)
-                        stats = change_list[0]
-                        changes = change_list[1: ]
-
-                        redo_stack.insert(0, StorePreviousStates(changes, generation, population, complex))
-
-                        if len(redo_stack) > HISTORY_STACK_SIZE:
-                            redo_stack.pop()
-
-                        generation = stats[0]
-                        population = stats[1]
-                        complex = stats[2]
-
-                        ProcessChanges(changes)
-            elif event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
     
-        UpdateScreen(generation, population, complex)
+        update_screen(generation, population, complex, camera_pos)
 
 if __name__ == "__main__":
     main()
