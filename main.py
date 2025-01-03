@@ -253,7 +253,7 @@ def main():
                         cells[x_index][y_index] = STATUSES["DEAD"]
                         population -= 1
                 elif event.button == 2: # M click
-                    generation, population = UpdateGen(generation, population, complex)
+                    generation, population, _= UpdateGen(generation, population, complex)
                 elif event.button == 3: # R click
                     is_evolving = not is_evolving
                     pygame.mouse.set_visible(not is_evolving)
