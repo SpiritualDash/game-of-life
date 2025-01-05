@@ -166,20 +166,26 @@ def update_screen(generation, population, complex, camera_pos):
 
         cell_x, cell_y = cell_pos
 
+        coord_display = text_font.render(f"Coordinates: ({cell_x}, {cell_y})", True, WHITE)
+        coord_rect = coord_display.get_rect()
+        coord_rect.topleft = (0, 40)
+
+        screen.blit(coord_display, coord_rect)
+
         if status == STATUSES["DEAD"]:
             pygame.draw.rect(screen, HOVER, pygame.Rect(int(x / SIZE) * SIZE, int(y / SIZE) * SIZE, SIZE, SIZE))
         else:
             stat_display = text_font.render(f"Cell Status: {STATUS_NAMES[status]}", True, status, (0, 0, 0))
-            coord_display = text_font.render(f"Coordinates: ({cell_x}, {cell_y})", True, WHITE, (0, 0, 0))
+            # coord_display = text_font.render(f"Coordinates: ({cell_x}, {cell_y})", True, WHITE, (0, 0, 0))
 
             stat_rect = stat_display.get_rect()
-            coord_rect = coord_display.get_rect()
+            # coord_rect = coord_display.get_rect()
 
             stat_rect.bottomleft = (x + 5, y + 26)
-            coord_rect.bottomleft = (x + 5, y + 5)
+            # coord_rect.bottomleft = (x + 5, y + 5)
 
             screen.blit(stat_display, stat_rect)
-            screen.blit(coord_display, coord_rect)
+            # screen.blit(coord_display, coord_rect)
     
     for cell_pos, status in cells.items():
         x, y = cell_pos
